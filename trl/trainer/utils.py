@@ -383,6 +383,72 @@ class DPODataCollatorWithPadding:
         return self.collate(tokenized_batch)
 
 
+from dataclasses import dataclass
+from transformers import PreTrainedTokenizerBase
+from typing import Any, Dict, List, Optional, Union
+
+
+@dataclass
+class RrhfDataCollatorWithPadding:
+    """DAta collator used for RRHF training. Excepts features with the following format:
+    {
+        'prompt': str,
+        'responses': List[str],
+        'scores': List[float],
+    }
+    """
+
+    tokenizer: PreTrainedTokenizerBase
+    label_pad_token_id: int = -100
+    return_tensors: str = "pt"
+
+    def _tokenize(self, inputs: str, max_len=None) -> Dict[str, Any]:
+        max_length = self.tokenizer.model_max_length if max_len is None else max_len
+
+        inputs_ids = self.tokenizer(
+            inputs,
+            return_tensors=self.return_tensors,
+            padding="longest",
+            max_length=max_length,
+        ).input_ids[0]
+        return inputs_ids
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        idxs = []
+        all_scores = []
+        input_ids = []
+        score_mask = []
+        labels = []
+        for idx, ins in enumerate(features):
+            prompt = ins["prompt"]
+            responses = ins["responses"]
+            scores = ins["scores"]
+            all_scores.append(scores)
+            idxs.append([idx] * len(scores))
+
+            prompt_input_ids = self._tokenize(prompt)
+            prompt_target = torch.LongTensor([self.label_pad_token_id] * (prompt_input_ids.shape[0] - 1))
+            dummy_target = torch.LongTensor([self.label_pad_token_id])
+            for res in responses:
+                res_input_ids = self._tokenize(
+                    res + self.tokenizer.eos_token, max_len=self.tokenizer.model_max_length - prompt_input_ids.shape[0]
+                )
+                input_ids.append(torch.cat((prompt_input_ids, res_input_ids), dim=0))
+                labels.append(torch.cat((prompt_target, res_input_ids, dummy_target), dim=0))
+
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+        )
+        labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=self.label_pad_token_id)
+        return dict(
+            input_ids=input_ids,
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+            labels=labels,
+            idxs=torch.LongTensor(idxs),
+            scores=torch.FloatTensor(all_scores),
+        )
+
+
 class ConstantLengthDataset(IterableDataset):
     """
     Iterable dataset that returns constant length chunks of tokens from stream of text files.
