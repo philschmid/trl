@@ -22,6 +22,7 @@ from .utils import (
     ConstantLengthDataset,
     DataCollatorForCompletionOnlyLM,
     RunningMoments,
+    RRHFDataCollatorWithPadding,
     disable_dropout_in_model,
 )
 
@@ -33,3 +34,4 @@ from .ppo_config import PPOConfig
 from .ppo_trainer import PPOTrainer
 from .reward_trainer import RewardTrainer, compute_accuracy
 from .sft_trainer import SFTTrainer
+from .rrhf_trainer import RRHFTrainer, RRHFTrainingArguments

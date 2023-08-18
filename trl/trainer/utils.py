@@ -389,7 +389,7 @@ from typing import Any, Dict, List, Optional, Union
 
 
 @dataclass
-class RrhfDataCollatorWithPadding:
+class RRHFDataCollatorWithPadding:
     """DAta collator used for RRHF training. Excepts features with the following format:
     {
         'prompt': str,
